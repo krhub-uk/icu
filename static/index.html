@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ICU Dashboard</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       background: #111;
       color: #eee;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
       margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
     }
     .card {
       text-align: center;
@@ -21,6 +23,7 @@
       border: 1px solid #333;
       border-radius: 12px;
       min-width: 280px;
+      margin-bottom: 1.5rem;
     }
     h1 { margin: 0 0 1rem 0; font-size: 1.5rem; }
 
@@ -44,13 +47,10 @@
     }
     .status-pill.running .dot { background: #3ecf5f; }
     .status-pill.running { border-color: #245c33; color: #7ee79a; }
-
     .status-pill.paused .dot { background: #e0a72e; }
     .status-pill.paused { border-color: #6b551c; color: #f3c968; }
-
     .status-pill.idle .dot { background: #888; }
     .status-pill.idle { border-color: #444; color: #aaa; }
-
     .status-pill.unknown .dot { background: #c0392b; }
     .status-pill.unknown { border-color: #6b2320; color: #e07a72; }
 
@@ -59,6 +59,50 @@
       font-size: 0.75rem;
       color: #666;
     }
+
+    /* Log panel */
+    .log-panel {
+      width: 100%;
+      max-width: 900px;
+      border: 1px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0c0c0c;
+    }
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #333;
+      background: #161616;
+    }
+    .log-header select {
+      background: #1a1a1a;
+      color: #eee;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.85rem;
+    }
+    .log-header .log-meta {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    #log-output {
+      margin: 0;
+      padding: 1rem;
+      max-height: 420px;
+      overflow-y: auto;
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #ccc;
+    }
+    #log-output .line { }
+    #log-output .line:nth-last-child(-n+3) { color: #fff; }
   </style>
 </head>
 <body>
@@ -71,7 +115,18 @@
     <div class="updated" id="updated">—</div>
   </div>
 
+  <div class="log-panel">
+    <div class="log-header">
+      <select id="log-select"></select>
+      <span class="log-meta" id="log-updated">—</span>
+    </div>
+    <pre id="log-output">Loading…</pre>
+  </div>
+
   <script>
+    let currentLog = null;
+    let autoScroll = true;
+
     async function pollState() {
       const pill = document.getElementById('status');
       const text = document.getElementById('status-text');
@@ -80,7 +135,6 @@
         const res = await fetch('/api/state');
         const data = await res.json();
         const state = (data.state || 'UNKNOWN').toUpperCase();
-
         pill.className = 'status-pill ' + state.toLowerCase();
         text.textContent = state;
         updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
@@ -91,8 +145,67 @@
       }
     }
 
-    pollState();
-    setInterval(pollState, 5000);
+    async function initLogSelect() {
+      const select = document.getElementById('log-select');
+      try {
+        const res = await fetch('/api/logs/list');
+        const data = await res.json();
+        select.innerHTML = '';
+        data.files.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f;
+          opt.textContent = f;
+          if (f === data.default) opt.selected = true;
+          select.appendChild(opt);
+        });
+        currentLog = data.default;
+      } catch (err) {
+        select.innerHTML = '<option>error loading list</option>';
+      }
+      select.addEventListener('change', () => {
+        currentLog = select.value;
+        pollLog();
+      });
+    }
+
+    async function pollLog() {
+      if (!currentLog) return;
+      const output = document.getElementById('log-output');
+      const meta = document.getElementById('log-updated');
+
+      // preserve scroll position unless user is already at the bottom
+      const wasAtBottom = output.scrollTop + output.clientHeight >= output.scrollHeight - 10;
+
+      try {
+        const res = await fetch(`/api/logs?file=${encodeURIComponent(currentLog)}&lines=150`);
+        if (!res.ok) throw new Error('bad response');
+        const data = await res.json();
+        output.innerHTML = data.lines.map(l =>
+          `<div class="line">${escapeHtml(l)}</div>`
+        ).join('');
+        meta.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+        if (wasAtBottom) {
+          output.scrollTop = output.scrollHeight;
+        }
+      } catch (err) {
+        meta.textContent = 'Fetch failed';
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    (async function start() {
+      await initLogSelect();
+      pollState();
+      pollLog();
+      setInterval(pollState, 5000);
+      setInterval(pollLog, 5000);
+    })();
   </script>
 </body>
 </html>
