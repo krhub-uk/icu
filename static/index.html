@@ -142,6 +142,9 @@
 <body>
   <div class="card">
     <h1>ICU Dashboard</h1>
+    <div style="font-size: 0.75rem; color: #666; margin: -0.75rem 0 1rem;">
+      <span id="whoami">—</span> · <a href="/auth/logout" style="color: #888;">Sign out</a>
+    </div>
     <div id="status" class="status-pill unknown">
       <span class="dot"></span>
       <span id="status-text">CHECKING...</span>
@@ -272,7 +275,18 @@
       return div.innerHTML;
     }
 
+    async function loadWhoami() {
+      try {
+        const res = await fetch('/api/whoami');
+        const data = await res.json();
+        document.getElementById('whoami').textContent = data.email || 'unknown';
+      } catch (err) {
+        document.getElementById('whoami').textContent = 'unknown';
+      }
+    }
+
     (async function start() {
+      loadWhoami();
       await initLogSelect();
       pollState();
       pollLog();

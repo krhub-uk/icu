@@ -1,2 +1,6 @@
 fastapi
 uvicorn[standard]
+authlib
+itsdangerous
+python-dotenv
+httpx
