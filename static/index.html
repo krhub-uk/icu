@@ -20,15 +20,79 @@
       padding: 2rem 3rem;
       border: 1px solid #333;
       border-radius: 12px;
+      min-width: 280px;
     }
-    h1 { margin: 0 0 0.5rem 0; font-size: 1.5rem; }
-    p { color: #888; margin: 0; }
+    h1 { margin: 0 0 1rem 0; font-size: 1.5rem; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      border: 1px solid #444;
+      background: #1a1a1a;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .status-pill.running .dot { background: #3ecf5f; }
+    .status-pill.running { border-color: #245c33; color: #7ee79a; }
+
+    .status-pill.paused .dot { background: #e0a72e; }
+    .status-pill.paused { border-color: #6b551c; color: #f3c968; }
+
+    .status-pill.idle .dot { background: #888; }
+    .status-pill.idle { border-color: #444; color: #aaa; }
+
+    .status-pill.unknown .dot { background: #c0392b; }
+    .status-pill.unknown { border-color: #6b2320; color: #e07a72; }
+
+    .updated {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>ICU Dashboard</h1>
-    <p>Step 1: pipe confirmed.</p>
+    <div id="status" class="status-pill unknown">
+      <span class="dot"></span>
+      <span id="status-text">CHECKING...</span>
+    </div>
+    <div class="updated" id="updated">—</div>
   </div>
+
+  <script>
+    async function pollState() {
+      const pill = document.getElementById('status');
+      const text = document.getElementById('status-text');
+      const updated = document.getElementById('updated');
+      try {
+        const res = await fetch('/api/state');
+        const data = await res.json();
+        const state = (data.state || 'UNKNOWN').toUpperCase();
+
+        pill.className = 'status-pill ' + state.toLowerCase();
+        text.textContent = state;
+        updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      } catch (err) {
+        pill.className = 'status-pill unknown';
+        text.textContent = 'UNREACHABLE';
+        updated.textContent = 'Last check failed';
+      }
+    }
+
+    pollState();
+    setInterval(pollState, 5000);
+  </script>
 </body>
 </html>
