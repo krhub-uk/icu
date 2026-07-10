@@ -1,11 +1,24 @@
 """
-ICU Dashboard — Step 3
-Adds /api/logs — tails a selected log file from /var/log/portfolio/.
-Filenames are validated against an allowlist derived from the directory
-listing, so arbitrary path traversal isn't possible via the query param.
+ICU Dashboard — Step 4
+Adds /api/control/pause, /api/control/resume, /api/control/halt.
+
+Two-stage safety model (whole-process, matching the current single
+.env/.pid pair — per-script control is a V4.9 spec item, not built here):
+
+  PAUSE  -> sets UNIVERSE_PROCESS=N in .env. Does NOT kill anything.
+            The running script is expected to check this flag between
+            iterations and exit its own loop cleanly, so any mid-flight
+            file write gets a chance to finish naturally.
+  RESUME -> sets UNIVERSE_PROCESS=Y in .env.
+  HALT   -> only enabled once already paused. Sends SIGTERM directly to
+            the PID in .pid. This is the emergency stop for a runaway
+            process hammering IG/TV with bad data — immediate, no
+            grace period, because protecting production from a
+            corrupted API loop matters more than a clean shutdown here.
 """
 
 import os
+import signal
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -14,8 +27,8 @@ app = FastAPI(title="ICU Dashboard")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-PID_FILE = "/opt/dev/universe_SS/.pid"
-ENV_FILE = "/opt/dev/universe_SS/.env"
+PID_FILE = Path("/opt/dev/universe_SS/.pid")
+ENV_FILE = Path("/opt/dev/universe_SS/.env")
 
 LOG_DIR = Path("/var/log/portfolio")
 DEFAULT_LOG = "intraday.log"
@@ -23,15 +36,35 @@ MAX_LINES = 500  # hard ceiling regardless of what's requested
 
 
 def get_universe_state() -> str:
-    if os.path.exists(PID_FILE):
+    if PID_FILE.exists():
         return "RUNNING"
     try:
-        with open(ENV_FILE) as f:
-            if "UNIVERSE_PROCESS=N" in f.read():
-                return "PAUSED"
+        if "UNIVERSE_PROCESS=N" in ENV_FILE.read_text():
+            return "PAUSED"
     except FileNotFoundError:
         pass
     return "IDLE"
+
+
+def set_universe_process_flag(value: str):
+    """Rewrite UNIVERSE_PROCESS=Y/N in .env, preserving every other line."""
+    assert value in ("Y", "N")
+    if not ENV_FILE.exists():
+        raise HTTPException(status_code=500, detail=".env not found on server")
+
+    lines = ENV_FILE.read_text().splitlines()
+    found = False
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith("UNIVERSE_PROCESS="):
+            new_lines.append(f"UNIVERSE_PROCESS={value}")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f"UNIVERSE_PROCESS={value}")
+
+    ENV_FILE.write_text("\n".join(new_lines) + "\n")
 
 
 def list_log_files() -> list[str]:
@@ -94,3 +127,44 @@ def api_logs(file: str = Query(default=DEFAULT_LOG), lines: int = Query(default=
         raise HTTPException(status_code=404, detail=f"'{file}' not found")
 
     return {"file": file, "lines": tail}
+
+
+@app.post("/api/control/pause")
+def api_control_pause():
+    set_universe_process_flag("N")
+    return {"result": "paused", "state": get_universe_state()}
+
+
+@app.post("/api/control/resume")
+def api_control_resume():
+    set_universe_process_flag("Y")
+    return {"result": "resumed", "state": get_universe_state()}
+
+
+@app.post("/api/control/halt")
+def api_control_halt():
+    # Only allowed once already paused — the pill must already read PAUSED
+    # (i.e. UNIVERSE_PROCESS=N) before we'll send a kill signal.
+    if get_universe_state() != "PAUSED":
+        raise HTTPException(
+            status_code=409,
+            detail="Halt is only available after Pause has been triggered."
+        )
+    if not PID_FILE.exists():
+        raise HTTPException(status_code=404, detail="No .pid file — nothing running to halt.")
+
+    try:
+        pid = int(PID_FILE.read_text().strip())
+    except ValueError:
+        raise HTTPException(status_code=500, detail=".pid file content is not a valid integer")
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        # Process already gone — clean up the stale pid file
+        PID_FILE.unlink(missing_ok=True)
+        return {"result": "halted", "detail": "process already exited, .pid cleared", "state": get_universe_state()}
+    except PermissionError:
+        raise HTTPException(status_code=500, detail=f"Permission denied sending SIGTERM to PID {pid}")
+
+    return {"result": "halted", "detail": f"SIGTERM sent to PID {pid}", "state": get_universe_state()}

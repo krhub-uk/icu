@@ -60,6 +60,40 @@
       color: #666;
     }
 
+    .controls {
+      display: flex;
+      gap: 0.6rem;
+      justify-content: center;
+      margin-top: 1.25rem;
+    }
+    .controls button {
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      border: 1px solid #444;
+      background: #1a1a1a;
+      color: #ccc;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .controls button:hover:not(:disabled) { background: #232323; }
+    .controls button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    #btn-pause { border-color: #6b551c; color: #f3c968; }
+    #btn-resume { border-color: #245c33; color: #7ee79a; }
+    #btn-halt { border-color: #6b2320; color: #e07a72; }
+
+    .control-msg {
+      margin-top: 0.6rem;
+      font-size: 0.75rem;
+      color: #888;
+      min-height: 1em;
+    }
+
     /* Log panel */
     .log-panel {
       width: 100%;
@@ -113,6 +147,13 @@
       <span id="status-text">CHECKING...</span>
     </div>
     <div class="updated" id="updated">—</div>
+
+    <div class="controls">
+      <button id="btn-pause" onclick="doControl('pause')">Pause</button>
+      <button id="btn-resume" onclick="doControl('resume')">Resume</button>
+      <button id="btn-halt" onclick="doControl('halt')" disabled>Halt</button>
+    </div>
+    <div class="control-msg" id="control-msg"></div>
   </div>
 
   <div class="log-panel">
@@ -138,10 +179,42 @@
         pill.className = 'status-pill ' + state.toLowerCase();
         text.textContent = state;
         updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
+        updateControlAvailability(state);
       } catch (err) {
         pill.className = 'status-pill unknown';
         text.textContent = 'UNREACHABLE';
         updated.textContent = 'Last check failed';
+        updateControlAvailability('UNKNOWN');
+      }
+    }
+
+    function updateControlAvailability(state) {
+      const pauseBtn = document.getElementById('btn-pause');
+      const resumeBtn = document.getElementById('btn-resume');
+      const haltBtn = document.getElementById('btn-halt');
+
+      // Halt only ever enabled once the flag has actually been set to
+      // paused — this is the deliberate two-stage gate: pause first,
+      // let any in-flight file write finish, then halt becomes available.
+      haltBtn.disabled = (state !== 'PAUSED');
+      pauseBtn.disabled = (state === 'PAUSED' || state === 'IDLE');
+      resumeBtn.disabled = (state === 'RUNNING' || state === 'IDLE');
+    }
+
+    async function doControl(action) {
+      const msg = document.getElementById('control-msg');
+      msg.textContent = `Sending ${action}…`;
+      try {
+        const res = await fetch(`/api/control/${action}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          msg.textContent = `${action} failed: ${data.detail || 'unknown error'}`;
+          return;
+        }
+        msg.textContent = `${action}: ${data.detail || data.result}`;
+        await pollState();
+      } catch (err) {
+        msg.textContent = `${action} failed: request error`;
       }
     }
 
