@@ -116,7 +116,9 @@ async function loadLog(id) {
     if (filter === 'WARN') {
       lines = lines.filter(l => /warn|error|critical/i.test(l));
     }
-    panel.querySelector('.log-lines').innerHTML = lines.map(l => `<div class="log-line">${escapeHtml(l)}</div>`).join('') || '<div class="log-line">(no lines)</div>';
+    const logLines = panel.querySelector('.log-lines');
+	  logLines.innerHTML = lines.map(l => `<div class="log-line">${escapeHtml(l)}</div>`).join('') || '<div class="log-line">(no lines)</div>';
+      setTimeout(() => { panel.scrollTop = panel.scrollHeight; }, 50);
   } catch (e) {
     panel.querySelector('.log-lines').innerHTML = `<div class="log-line">Error loading log: ${escapeHtml(e.message)}</div>`;
   }
