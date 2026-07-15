@@ -1,298 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ICU Dashboard</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      background: #111;
-      color: #eee;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem;
-    }
-    .card {
-      text-align: center;
-      padding: 2rem 3rem;
-      border: 1px solid #333;
-      border-radius: 12px;
-      min-width: 280px;
-      margin-bottom: 1.5rem;
-    }
-    h1 { margin: 0 0 1rem 0; font-size: 1.5rem; }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 1rem;
-      border-radius: 999px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      border: 1px solid #444;
-      background: #1a1a1a;
-    }
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #666;
-    }
-    .status-pill.running .dot { background: #3ecf5f; }
-    .status-pill.running { border-color: #245c33; color: #7ee79a; }
-    .status-pill.paused .dot { background: #e0a72e; }
-    .status-pill.paused { border-color: #6b551c; color: #f3c968; }
-    .status-pill.idle .dot { background: #888; }
-    .status-pill.idle { border-color: #444; color: #aaa; }
-    .status-pill.unknown .dot { background: #c0392b; }
-    .status-pill.unknown { border-color: #6b2320; color: #e07a72; }
-
-    .updated {
-      margin-top: 0.75rem;
-      font-size: 0.75rem;
-      color: #666;
-    }
-
-    .controls {
-      display: flex;
-      gap: 0.6rem;
-      justify-content: center;
-      margin-top: 1.25rem;
-    }
-    .controls button {
-      font-family: inherit;
-      font-size: 0.85rem;
-      font-weight: 600;
-      padding: 0.5rem 1.1rem;
-      border-radius: 8px;
-      border: 1px solid #444;
-      background: #1a1a1a;
-      color: #ccc;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .controls button:hover:not(:disabled) { background: #232323; }
-    .controls button:disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-    }
-    #btn-pause { border-color: #6b551c; color: #f3c968; }
-    #btn-resume { border-color: #245c33; color: #7ee79a; }
-    #btn-halt { border-color: #6b2320; color: #e07a72; }
-
-    .control-msg {
-      margin-top: 0.6rem;
-      font-size: 0.75rem;
-      color: #888;
-      min-height: 1em;
-    }
-
-    /* Log panel */
-    .log-panel {
-      width: 100%;
-      max-width: 900px;
-      border: 1px solid #333;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #0c0c0c;
-    }
-    .log-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid #333;
-      background: #161616;
-    }
-    .log-header select {
-      background: #1a1a1a;
-      color: #eee;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 0.3rem 0.6rem;
-      font-size: 0.85rem;
-    }
-    .log-header .log-meta {
-      font-size: 0.75rem;
-      color: #666;
-    }
-    #log-output {
-      margin: 0;
-      padding: 1rem;
-      max-height: 420px;
-      overflow-y: auto;
-      font-family: "SF Mono", Consolas, monospace;
-      font-size: 0.8rem;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-break: break-all;
-      color: #ccc;
-    }
-    #log-output .line { }
-    #log-output .line:nth-last-child(-n+3) { color: #fff; }
-  </style>
+<meta charset="UTF-8">
+<title>ICU — Platform Command Layer</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card-bg: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --running: #3fb950;
+    --idle: #484f58;
+    --paused: #d29922;
+    --error: #f85149;
+    --halted: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; letter-spacing: 0.02em; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill { border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--card-bg); }
+  .pill .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .global-controls button { margin-left: 8px; }
+  button {
+    background: #21262d; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  button:hover { background: #30363d; }
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border); border-left: 4px solid var(--idle);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .card-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .anim-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--running); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .meta { color: var(--text-dim); font-size: 12px; margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .controls button { margin-left: 6px; }
+  .log-toggle { margin-top: 8px; background: none; border: none; color: var(--text-dim); font-size: 12px; cursor: pointer; padding: 0; }
+  .log-panel { display: none; margin-top: 10px; background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: ui-monospace, monospace; font-size: 12px; max-height: 260px; overflow-y: auto; }
+  .log-panel.open { display: block; }
+  .log-filter { margin-bottom: 6px; }
+  .log-filter button { padding: 3px 8px; font-size: 11px; }
+  .log-line { white-space: pre-wrap; word-break: break-all; padding: 1px 0; }
+</style>
 </head>
 <body>
-  <div class="card">
-    <h1>ICU Dashboard</h1>
-    <div style="font-size: 0.75rem; color: #666; margin: -0.75rem 0 1rem;">
-      <span id="whoami">—</span> · <a href="/auth/logout" style="color: #888;">Sign out</a>
+  <div class="topbar">
+    <h1>ICU — Platform Command Layer</h1>
+    <div class="summary" id="summary"></div>
+    <div class="global-controls">
+      <button onclick="resumeAll()">Resume All</button>
+      <button onclick="haltAll()">Halt All</button>
+      <a href="/auth/logout" style="margin-left:8px;color:var(--text-dim);font-size:12px;text-decoration:none;">Logout</a>
     </div>
-    <div id="status" class="status-pill unknown">
-      <span class="dot"></span>
-      <span id="status-text">CHECKING...</span>
-    </div>
-    <div class="updated" id="updated">—</div>
-
-    <div class="controls">
-      <button id="btn-pause" onclick="doControl('pause')">Pause</button>
-      <button id="btn-resume" onclick="doControl('resume')">Resume</button>
-      <button id="btn-halt" onclick="doControl('halt')" disabled>Halt</button>
-    </div>
-    <div class="control-msg" id="control-msg"></div>
   </div>
+  <div class="cards" id="cards"></div>
 
-  <div class="log-panel">
-    <div class="log-header">
-      <select id="log-select"></select>
-      <span class="log-meta" id="log-updated">—</span>
-    </div>
-    <pre id="log-output">Loading…</pre>
-  </div>
+<script>
+const STATE_COLORS = { RUNNING: 'var(--running)', IDLE: 'var(--idle)', PAUSED: 'var(--paused)', ERROR: 'var(--error)', HALTED: 'var(--halted)' };
+const openPanels = new Set();
+const logFilters = {};
 
-  <script>
-    let currentLog = null;
-    let autoScroll = true;
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
 
-    async function pollState() {
-      const pill = document.getElementById('status');
-      const text = document.getElementById('status-text');
-      const updated = document.getElementById('updated');
-      try {
-        const res = await fetch('/api/state');
-        const data = await res.json();
-        const state = (data.state || 'UNKNOWN').toUpperCase();
-        pill.className = 'status-pill ' + state.toLowerCase();
-        text.textContent = state;
-        updated.textContent = 'Updated ' + new Date().toLocaleTimeString();
-        updateControlAvailability(state);
-      } catch (err) {
-        pill.className = 'status-pill unknown';
-        text.textContent = 'UNREACHABLE';
-        updated.textContent = 'Last check failed';
-        updateControlAvailability('UNKNOWN');
-      }
+function controlsFor(id, status) {
+  const map = {
+    IDLE: [['Run Now', () => runNow(id)], ['Pause', () => setAllowed(id, false)]],
+    RUNNING: [['Pause', () => setAllowed(id, false)], ['Halt', () => setAllowed(id, false)]],
+    PAUSED: [['Resume', () => setAllowed(id, true)]],
+    ERROR: [['Run Now', () => runNow(id)], ['Halt', () => setAllowed(id, false)]],
+    HALTED: [['Resume', () => setAllowed(id, true)]],
+  };
+  return map[status] || [];
+}
+
+async function setAllowed(id, allowed) {
+  await fetchJSON(`/control/${id}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({allowed_to_run: allowed}) });
+  refresh();
+}
+async function runNow(id) {
+  try { await fetchJSON(`/trigger/${id}`, { method: 'POST' }); } catch (e) { alert('Trigger failed: ' + e.message); }
+  refresh();
+}
+async function resumeAll() { await fetchJSON('/api/resume-all', { method: 'POST' }); refresh(); }
+async function haltAll() { await fetchJSON('/api/halt-all', { method: 'POST' }); refresh(); }
+
+function toggleLog(id) {
+  if (openPanels.has(id)) { openPanels.delete(id); } else { openPanels.add(id); loadLog(id); }
+  render(window.__lastComponents || []);
+}
+
+async function loadLog(id) {
+  const panel = document.getElementById('log-' + id);
+  if (!panel) return;
+  try {
+    const data = await fetchJSON(`/logs/${id}?lines=50`);
+    const filter = logFilters[id] || 'ALL';
+    let lines = data.lines;
+    if (filter === 'WARN') {
+      lines = lines.filter(l => /warn|error|critical/i.test(l));
     }
+    panel.querySelector('.log-lines').innerHTML = lines.map(l => `<div class="log-line">${escapeHtml(l)}</div>`).join('') || '<div class="log-line">(no lines)</div>';
+  } catch (e) {
+    panel.querySelector('.log-lines').innerHTML = `<div class="log-line">Error loading log: ${escapeHtml(e.message)}</div>`;
+  }
+}
 
-    function updateControlAvailability(state) {
-      const pauseBtn = document.getElementById('btn-pause');
-      const resumeBtn = document.getElementById('btn-resume');
-      const haltBtn = document.getElementById('btn-halt');
+function setFilter(id, filter) {
+  logFilters[id] = filter;
+  loadLog(id);
+}
 
-      // Halt only ever enabled once the flag has actually been set to
-      // paused — this is the deliberate two-stage gate: pause first,
-      // let any in-flight file write finish, then halt becomes available.
-      haltBtn.disabled = (state !== 'PAUSED');
-      pauseBtn.disabled = (state === 'PAUSED' || state === 'IDLE');
-      resumeBtn.disabled = (state === 'RUNNING' || state === 'IDLE');
-    }
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-    async function doControl(action) {
-      const msg = document.getElementById('control-msg');
-      msg.textContent = `Sending ${action}…`;
-      try {
-        const res = await fetch(`/api/control/${action}`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) {
-          msg.textContent = `${action} failed: ${data.detail || 'unknown error'}`;
-          return;
-        }
-        msg.textContent = `${action}: ${data.detail || data.result}`;
-        await pollState();
-      } catch (err) {
-        msg.textContent = `${action} failed: request error`;
-      }
-    }
+function render(components) {
+  window.__lastComponents = components;
+  const counts = { RUNNING:0, IDLE:0, PAUSED:0, ERROR:0, HALTED:0 };
+  components.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
+  document.getElementById('summary').innerHTML = Object.entries(counts).map(([s,n]) =>
+    `<span class="pill"><span class="dot" style="background:${STATE_COLORS[s]}"></span>${s} · ${n}</span>`
+  ).join('');
 
-    async function initLogSelect() {
-      const select = document.getElementById('log-select');
-      try {
-        const res = await fetch('/api/logs/list');
-        const data = await res.json();
-        select.innerHTML = '';
-        data.files.forEach(f => {
-          const opt = document.createElement('option');
-          opt.value = f;
-          opt.textContent = f;
-          if (f === data.default) opt.selected = true;
-          select.appendChild(opt);
-        });
-        currentLog = data.default;
-      } catch (err) {
-        select.innerHTML = '<option>error loading list</option>';
-      }
-      select.addEventListener('change', () => {
-        currentLog = select.value;
-        pollLog();
-      });
-    }
+  document.getElementById('cards').innerHTML = components.map(c => {
+    const color = STATE_COLORS[c.status] || STATE_COLORS.IDLE;
+    const isOpen = openPanels.has(c.component_id);
+    const filter = logFilters[c.component_id] || 'ALL';
+    return `
+    <div class="card" style="border-left-color:${color}">
+      <div class="card-top">
+        <div class="card-title">
+          ${c.status === 'RUNNING' ? '<span class="anim-dot"></span>' : ''}
+          ${escapeHtml(c.display_name)}
+          <span class="badge" style="background:${color};color:#0d1117">${c.status}</span>
+        </div>
+        <div class="controls">
+          ${controlsFor(c.component_id, c.status).map(([label, fn], i) =>
+            `<button onclick="(${fn.toString()})()">${label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="meta">
+        <span>${escapeHtml(c.component_id)}</span>
+        <span>last run: ${c.last_run_utc || '—'}</span>
+        <span>result: ${c.last_run_result || '—'}</span>
+        <span>${c.schedule_string}${c.expected_interval ? ' · ' + c.expected_interval : ''} · last push: ${c.received_at || '—'}</span>
+        <span>${c.version || '—'} · ${c.github_repo_tag || '—'}</span>
+      </div>
+      <button class="log-toggle" onclick="toggleLog('${c.component_id}')">${isOpen ? '▾ hide log' : '▸ show log'}</button>
+      <div class="log-panel ${isOpen ? 'open' : ''}" id="log-${c.component_id}">
+        <div class="log-filter">
+          <button onclick="setFilter('${c.component_id}','ALL')" style="${filter==='ALL'?'font-weight:700':''}">ALL</button>
+          <button onclick="setFilter('${c.component_id}','WARN')" style="${filter==='WARN'?'font-weight:700':''}">WARN+</button>
+        </div>
+        <div class="log-lines">loading…</div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="meta">No components registered yet.</div>';
 
-    async function pollLog() {
-      if (!currentLog) return;
-      const output = document.getElementById('log-output');
-      const meta = document.getElementById('log-updated');
+  openPanels.forEach(id => loadLog(id));
+}
 
-      // preserve scroll position unless user is already at the bottom
-      const wasAtBottom = output.scrollTop + output.clientHeight >= output.scrollHeight - 10;
+async function refresh() {
+  try {
+    const components = await fetchJSON('/api/components');
+    render(components);
+  } catch (e) {
+    console.error(e);
+  }
+}
 
-      try {
-        const res = await fetch(`/api/logs?file=${encodeURIComponent(currentLog)}&lines=150`);
-        if (!res.ok) throw new Error('bad response');
-        const data = await res.json();
-        output.innerHTML = data.lines.map(l =>
-          `<div class="line">${escapeHtml(l)}</div>`
-        ).join('');
-        meta.textContent = 'Updated ' + new Date().toLocaleTimeString();
-
-        if (wasAtBottom) {
-          output.scrollTop = output.scrollHeight;
-        }
-      } catch (err) {
-        meta.textContent = 'Fetch failed';
-      }
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    }
-
-    async function loadWhoami() {
-      try {
-        const res = await fetch('/api/whoami');
-        const data = await res.json();
-        document.getElementById('whoami').textContent = data.email || 'unknown';
-      } catch (err) {
-        document.getElementById('whoami').textContent = 'unknown';
-      }
-    }
-
-    (async function start() {
-      loadWhoami();
-      await initLogSelect();
-      pollState();
-      pollLog();
-      setInterval(pollState, 5000);
-      setInterval(pollLog, 5000);
-    })();
-  </script>
+refresh();
+setInterval(refresh, 5000);
+</script>
 </body>
 </html>
