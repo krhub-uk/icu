@@ -1,15 +1,20 @@
 import logging
+import os
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 import httpx
 from icu_registry.db import get_pool
 from icu_registry.models import ControlPatchIn
+from fastapi import APIRouter, Depends, HTTPException
+from icu_registry.deps import verify_api_key
 
 router = APIRouter()
 logger = logging.getLogger("icu.control")
 
+ICU_API_KEY = os.getenv("ICU_API_KEY")
 
-@router.get("/control/{component_id}")
+
+@router.get("/control/{component_id}", dependencies=[Depends(verify_api_key)])
 async def get_control(component_id: str):
     pool = get_pool()
     row = await pool.fetchrow(
@@ -56,7 +61,10 @@ async def trigger_component(component_id: str):
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"{reg['endpoint_url']}/trigger")
+            resp = await client.post(
+                f"{reg['endpoint_url']}/trigger",
+                headers={"X-ICU-Key": ICU_API_KEY} if ICU_API_KEY else None,
+            )
         return {"triggered": True, "component_status_code": resp.status_code, "component_response": resp.text}
     except httpx.HTTPError as exc:
         logger.error("Trigger call failed for %s: %s", component_id, exc)

@@ -79,12 +79,13 @@ async function fetchJSON(url, opts) {
 }
 
 function controlsFor(id, status) {
+  const i = id.replace(/'/g, "\\'");
   const map = {
-    IDLE: [['Run Now', () => runNow(id)], ['Pause', () => setAllowed(id, false)]],
-    RUNNING: [['Pause', () => setAllowed(id, false)], ['Halt', () => setAllowed(id, false)]],
-    PAUSED: [['Resume', () => setAllowed(id, true)]],
-    ERROR: [['Run Now', () => runNow(id)], ['Halt', () => setAllowed(id, false)]],
-    HALTED: [['Resume', () => setAllowed(id, true)]],
+    IDLE:    [['Run Now', `runNow('${i}')`],       ['Pause',  `setAllowed('${i}', false)`]],
+    RUNNING: [['Pause',   `setAllowed('${i}', false)`], ['Halt', `setAllowed('${i}', false)`]],
+    PAUSED:  [['Resume',  `setAllowed('${i}', true)`]],
+    ERROR:   [['Run Now', `runNow('${i}')`],       ['Halt',   `setAllowed('${i}', false)`]],
+    HALTED:  [['Resume',  `setAllowed('${i}', true)`]],
   };
   return map[status] || [];
 }
@@ -149,8 +150,8 @@ function render(components) {
           <span class="badge" style="background:${color};color:#0d1117">${c.status}</span>
         </div>
         <div class="controls">
-          ${controlsFor(c.component_id, c.status).map(([label, fn], i) =>
-            `<button onclick="(${fn.toString()})()">${label}</button>`).join('')}
+          ${controlsFor(c.component_id, c.status).map(([label, action]) =>
+			`<button onclick="${escapeHtml(action)}">${label}</button>`).join('')}
         </div>
       </div>
       <div class="meta">

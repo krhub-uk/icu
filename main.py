@@ -18,12 +18,14 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
+
+
 
 # .env lives alongside this file (icu repo root), separate from
 # Universe_SS's own .env which we only ever read, never write our
@@ -37,6 +39,14 @@ from icu_registry.routes import registry, status, control, dashboard_api
 GOOGLE_CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
 GOOGLE_CLIENT_SECRET = os.environ["GOOGLE_CLIENT_SECRET"]
 SESSION_SECRET_KEY = os.environ["SESSION_SECRET_KEY"]
+
+ICU_API_KEY = os.getenv("ICU_API_KEY")
+def verify_api_key(x_icu_key: str = Header(...)):
+    if not ICU_API_KEY or x_icu_key != ICU_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+
 
 # Allowlist — only these emails may hold a session. Extend this list
 # (or move to .env as a comma-separated var) if more people ever need
@@ -80,8 +90,8 @@ oauth.register(
 # All ICU registry routes require a valid, allowlisted session.
 _auth_dep = [Depends(require_session)]
 app.include_router(registry.router, dependencies=_auth_dep)
-app.include_router(status.router, dependencies=_auth_dep)
-app.include_router(control.router, dependencies=_auth_dep)
+app.include_router(status.router)
+app.include_router(control.router)
 app.include_router(dashboard_api.router, dependencies=_auth_dep)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

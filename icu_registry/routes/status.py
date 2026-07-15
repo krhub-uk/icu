@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException, Request
 from icu_registry.db import get_pool
 from icu_registry.models import STATUS_VALUES, RESULT_VALUES, TRIGGER_VALUES
 from icu_registry.alerts import send_pushover_alert
+from fastapi import APIRouter, Depends, HTTPException, Request
+from icu_registry.deps import verify_api_key
 
 router = APIRouter()
 logger = logging.getLogger("icu.status")
@@ -21,7 +23,7 @@ def _parse_ts(value):
         return None
 
 
-@router.post("/ingest/status", status_code=202)
+@router.post("/ingest/status", status_code=202, dependencies=[Depends(verify_api_key)])
 async def ingest_status(request: Request):
     body = await request.json()
 
